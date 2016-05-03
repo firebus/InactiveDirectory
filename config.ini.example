@@ -6,9 +6,6 @@ ldap_base_dn = 'DC=example,DC=com'
 ldap_filter = 'CN=Foo Bar'
 ldap_skip_string = 'OU=Ignored Users'
 
-[database]
-database_path = '/tmp/id.sq3'
-
 [hipchat]
 hipchat_url = 'https://api.hipchat.example.com'
 hipchat_room = 'InactiveDirectory'
