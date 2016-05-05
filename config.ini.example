@@ -4,7 +4,7 @@ ldap_bind_user = 'username'
 ldap_bind_password = 'password'
 ldap_base_dn = 'DC=example,DC=com'
 ldap_filter = 'CN=Foo Bar'
-ldap_skip_string = 'OU=Ignored Users'
+ldap_skip_ous = 'Ignored Users,Bad Users'
 
 [hipchat]
 hipchat_url = 'https://api.hipchat.example.com'

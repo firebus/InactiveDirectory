@@ -16,7 +16,7 @@ if ($firstRun) {
 $users = getUsers($config['ldap']);
 if ($users) {
 	error_log(date('c') . " action=search count={$users['count']}");
-	updateUsers($dbh, $users, $config['ldap']['ldap_skip_string'], $updated);
+	updateUsers($dbh, $users, $config['ldap']['ldap_skip_ou_list'], $updated);
 	if ($firstRun) {
 		notifyHipchat($config['hipchat'], "first run. {$users['count']} users.", "yellow");
 	} else {
@@ -74,21 +74,28 @@ function getUsers($config) {
 }
 
 # update/insert all valid users into the database
-function updateUsers($dbh, $users, $skip_string = FALSE, $updated) {
+function updateUsers($dbh, $users, $skip_ou_list, $updated) {
+	$skip_ous = array();
+	if ($skip_ou_list) {
+		$skip_ous = split(',', $skip_ou_list);
+	}
 	foreach ($users as $key => $user) {
 		if (is_int($key)) {
-			if (! $skip_string || ! strstr($user['dn'], $skip_string)) {
-				if (empty($user['title']) || empty($user['department']) || empty($user['physicaldeliveryofficename'])) {
-					error_log(date('c') . " action=skipping_user dn=\"{$user['dn']}");
-				} else {
-					error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
-					$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
-						. " (id, dn, cn, title, department, location, mail, created, updated)"
-						. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
-						. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
-					$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-						$user['physicaldeliveryofficename'][0], $user['mail'][0], $user['dn'], $updated));
+			foreach ($skip_ous as $ou) {
+				if (strstr($user['dn'], "OU=$ou")) {
+					error_log(date('c') . " action=skipping_user reason=ou dn=\"{$user['dn']} ou=$ou");
 				}
+			}
+			if (empty($user['title']) || empty($user['department'])) {
+				error_log(date('c') . " action=skipping_user reason=missing_attributes dn=\"{$user['dn']}");
+			} else {
+				error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
+				$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
+					. " (id, dn, cn, title, department, location, mail, created, updated)"
+					. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
+					. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
+				$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
+					$user['physicaldeliveryofficename'][0], $user['mail'][0], $user['dn'], $updated));
 			}
 		}
 	}
@@ -99,7 +106,9 @@ function processDeadUsers($config, $dbh, $updated) {
 	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
 	$dead_users = $result->fetchAll(PDO::FETCH_ASSOC);
+	$count = 0;
 	foreach ($dead_users as $dead_user) {
+		$count++;
 		# TODO: don't send goodbye w/o checking for errors
 		$sth = $dbh->prepare("UPDATE deathwatch SET dead = 1 WHERE id = ?");
 		$sth->execute(array($dead_user['id']));
@@ -114,6 +123,8 @@ function processDeadUsers($config, $dbh, $updated) {
 			error_log(date('c') . ' action=hipchat_notification message="notification failed"');
 		}
 	}
+	
+	return $count;
 }
 
 # any users with created time that is later than updated time are new. send a notification.
@@ -121,7 +132,9 @@ function processNewUsers($config, $dbh) {
 	$result = $dbh->query("SELECT dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
 	$new_users = $result->fetchAll(PDO::FETCH_ASSOC);
+	$count = 0;
 	foreach ($new_users as $new_user) {
+		$count++;
 		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
 		$result = notifyHipchat(
 			$config,
@@ -133,6 +146,7 @@ function processNewUsers($config, $dbh) {
 			error_log(date('c') . ' action=hipchat_notification message="notification failed"');
 		}
 	}
+	return $count;
 }
 
 function notifyHipchat($config, $message, $color) {
