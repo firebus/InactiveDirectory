@@ -84,19 +84,21 @@ function updateUsers($dbh, $users, $skip_ou_list, $updated) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
 					error_log(date('c') . " action=skipping_user reason=ou dn=\"{$user['dn']} ou=$ou");
+					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
 				error_log(date('c') . " action=skipping_user reason=missing_attributes dn=\"{$user['dn']}");
-			} else {
-				error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
-				$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
-					. " (id, dn, cn, title, department, location, mail, created, updated)"
-					. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
-					. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
-				$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-					$user['physicaldeliveryofficename'][0], $user['mail'][0], $user['dn'], $updated));
+				continue;
 			}
+			
+			error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
+			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
+				. " (id, dn, cn, title, department, location, mail, created, updated)"
+				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
+				. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
+			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
+				$user['physicaldeliveryofficename'][0], $user['mail'][0], $user['dn'], $updated));
 		}
 	}
 }
