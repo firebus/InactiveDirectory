@@ -78,7 +78,7 @@ function updateUsers($dbh, $users, $skip_string = FALSE, $updated) {
 	foreach ($users as $key => $user) {
 		if (is_int($key)) {
 			if (! $skip_string || ! strstr($user['dn'], $skip_string)) {
-				if (! $user['title'] || ! $user['department'] || ! $user['physicaldeliveryofficename']) {
+				if (empty($user['title']) || empty($user['department']) || empty($user['physicaldeliveryofficename'])) {
 					error_log(date('c') . " action=skipping_user dn=\"{$user['dn']}");
 				} else {
 					error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
