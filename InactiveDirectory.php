@@ -16,14 +16,14 @@ if ($firstRun) {
 $users = getUsers($config['ldap']);
 if ($users) {
 	error_log(date('c') . " action=search count={$users['count']}");
-	updateUsers($dbh, $users, $config['ldap']['ldap_skip_ou_list'], $updated);
+	$count = updateUsers($dbh, $users, $config['ldap']['ldap_skip_ou_list'], $updated);
 	if ($firstRun) {
-		notifyHipchat($config['hipchat'], "first run. {$users['count']} users.", "yellow");
+		notifyHipchat($config['hipchat'], "first run. $count users.", "yellow");
 	} else {
 		$deadCount = processDeadUsers($config['hipchat'], $dbh, $updated);
 		$newCount = processNewUsers($config['hipchat'], $dbh);
 		if ($deadCount || $newCount) {
-			$newCount = $users['count'] - $deadCount + $newCount;
+			$newCount = $count - $deadCount + $newCount;
 			notifyHipchat($config['hipchat'], "$newCount users.", "yellow");
 		}
 	}
@@ -75,6 +75,7 @@ function getUsers($config) {
 
 # update/insert all valid users into the database
 function updateUsers($dbh, $users, $skip_ou_list, $updated) {
+	$count = $users['count'];
 	$skip_ous = array();
 	if ($skip_ou_list) {
 		$skip_ous = split(',', $skip_ou_list);
@@ -84,23 +85,29 @@ function updateUsers($dbh, $users, $skip_ou_list, $updated) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
 					error_log(date('c') . " action=skipping_user reason=ou dn=\"{$user['dn']} ou=$ou");
+					$count--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
 				error_log(date('c') . " action=skipping_user reason=missing_attributes dn=\"{$user['dn']}");
+				$count--;
 				continue;
 			}
 			
 			error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
+			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
+			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
 				. " (id, dn, cn, title, department, location, mail, created, updated)"
 				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
 				. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-				$user['physicaldeliveryofficename'][0], $user['mail'][0], $user['dn'], $updated));
+				$location, $mail, $user['dn'], $updated));
 		}
 	}
+	
+	return $count;
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
