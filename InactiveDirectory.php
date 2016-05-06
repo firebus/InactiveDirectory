@@ -15,8 +15,9 @@ if ($firstRun) {
 
 $users = getUsers($config['ldap']);
 if ($users) {
-	error_log(date('c') . " action=search count={$users['count']}");
+	error_log(date('c') . " action=ldapsearch count={$users['count']}");
 	$count = updateUsers($dbh, $users, $config['ldap']['ldap_skip_ou_list'], $updated);
+	error_log(date('c') . " action=update_complete count=$count");
 	if ($firstRun) {
 		notifyHipchat($config['hipchat'], "first run. $count users.", "yellow");
 	} else {
