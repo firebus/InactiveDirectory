@@ -137,7 +137,7 @@ function updateUsers($users) {
 # any users that were not just updated are dead. mark them dead. send a notification.
 function processDeadUsers() {
 	global $config, $dbh, $updated;
-	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail"
+	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, created"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
 	$dead_users = $result->fetchAll(PDO::FETCH_ASSOC);
 	$count = 0;
@@ -149,7 +149,8 @@ function processDeadUsers() {
 		error_log (date('c') . " action=dead_user dn=\"{$dead_user['dn']}\"");
 		$type = getUserType($dead_user['dn'], $dead_user['cn']);
 		notifyHipchat(
-			"goodbye {$dead_user['cn']} - $userType - ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']} at {$dead_user['location']}",
+			"goodbye {$dead_user['cn']} - $userType - ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']}"
+				. " at {$dead_user['location']} joined on {$dead_user['created']}",
 			"red");
 	}
 	
@@ -168,7 +169,8 @@ function processNewUsers() {
 		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
 		$type = getUserType($new_user['dn'], $new_user['cn']);
 		notifyHipchat(
-			"welcome {$new_user['cn']} - $userType - ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at {$new_user['location']}",
+			"welcome {$new_user['cn']} - $userType - ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at"
+				. " {$new_user['location']}",
 			"green");
 	}
 	return $count;
