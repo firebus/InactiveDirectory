@@ -91,7 +91,7 @@ function updateUsers($users) {
 	$contractUsers = 0;
 	$otherUsers = 0;
 	$skip_ous = array();
-	if ($skip_ou_list) {
+	if ($config['ldap']['ldap_skip_ou_list']) {
 		$skip_ous = split(',', $config['ldap']['ldap_skip_ou_list']);
 	}
 	foreach ($users as $key => $user) {
@@ -149,7 +149,7 @@ function processDeadUsers() {
 		error_log (date('c') . " action=dead_user dn=\"{$dead_user['dn']}\"");
 		$type = getUserType($dead_user['dn'], $dead_user['cn']);
 		notifyHipchat(
-			"goodbye {$dead_user['cn']} - $userType - ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']}"
+			"goodbye {$dead_user['cn']}, $type, {$dead_user['mail']}, {$dead_user['title']} in {$dead_user['department']}"
 				. " at {$dead_user['location']} joined on {$dead_user['created']}",
 			"red");
 	}
@@ -169,7 +169,7 @@ function processNewUsers() {
 		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
 		$type = getUserType($new_user['dn'], $new_user['cn']);
 		notifyHipchat(
-			"welcome {$new_user['cn']} - $userType - ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at"
+			"welcome {$new_user['cn']}, $type, {$new_user['mail']}, {$new_user['title']} in {$new_user['department']} at"
 				. " {$new_user['location']}",
 			"green");
 	}
@@ -178,7 +178,7 @@ function processNewUsers() {
 
 function notifyHipchat($message, $color) {
 	global $config;
-	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat_room']}/notification?auth_token={$config['hipchat']['hipchat_token']}";
+	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?auth_token={$config['hipchat']['hipchat_token']}";
 	#TODO escape $message properly
 	$data = "{\"color\":\"$color\", \"message\":\"$message\", \"notify\": true}";
 
