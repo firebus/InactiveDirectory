@@ -2,38 +2,46 @@
 
 # ubuntu package requirements: php5-ldap, php5-sqlite, php5-curl
 
+global $config;
 $config = parse_ini_file('config.ini', TRUE);
+
+global $updated;
 $updated = time();
 
 # connect to database
+global $dbh;
 $dbh = new PDO("sqlite:" . __DIR__ . '/deathwatch.sq3');			
 
-$firstRun = setupDatabase($dbh);
+$firstRun = setupDatabase();
 if ($firstRun) {
     error_log(date('c') . ' action=first_run');
 }
 
-$users = getUsers($config['ldap']);
+$users = getUsers();
 if ($users) {
 	error_log(date('c') . " action=ldapsearch count={$users['count']}");
-	$count = updateUsers($dbh, $users, $config['ldap']['ldap_skip_ou_list'], $updated);
+	list($totalUsers, $regularUsers, $contractUsers) = updateUsers($users);
 	error_log(date('c') . " action=update_complete count=$count");
 	if ($firstRun) {
-		notifyHipchat($config['hipchat'], "first run. $count users.", "yellow");
+		notifyHipchat("first run. $count users.", "yellow");
 	} else {
-		$deadCount = processDeadUsers($config['hipchat'], $dbh, $updated);
-		$newCount = processNewUsers($config['hipchat'], $dbh);
-		if ($deadCount || $newCount) {
-			$newCount = $count - $deadCount + $newCount;
-			notifyHipchat($config['hipchat'], "$newCount users.", "yellow");
+		$deadCount = processDeadUsers();
+		$newCount = processNewUsers();
+		if ($deadCount) {
+			notifyHipchat("$deadCount users removed.", "red");
 		}
+		if ($newCount) {
+			notifyHipchat("$newCount users added.", "green");
+		}
+		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors.", "yellow");
 	}
 } else {
 	error_log(date('c') . ' action=users message="no users"');
 }
 
 # create the table on first run
-function setUpDatabase($dbh) {
+function setUpDatabase() {
+	global $dbh;
 	$firstRun = FALSE;
 	$statement = $dbh->query("select * from sqlite_master");
 	$result = $statement->fetchAll();
@@ -56,13 +64,14 @@ function setUpDatabase($dbh) {
 	return $firstRun;
 }
 
-function getUsers($config) {
+function getUsers() {
+	global $config;
 	# connnect to ldap
-	$link_id = ldap_connect($config['ldap_host']);
+	$link_id = ldap_connect($config['ldap']['ldap_host']);
 	$users = FALSE;
 	if (ldap_set_option($link_id, LDAP_OPT_PROTOCOL_VERSION, 3)) {
-		if (ldap_bind($link_id, $config['ldap_bind_user'], $config['ldap_bind_password'])) {
-			$result_id = ldap_search($link_id, $config['ldap_base_dn'], $config['ldap_filter'],
+		if (ldap_bind($link_id, $config['ldap']['ldap_bind_user'], $config['ldap']['ldap_bind_password'])) {
+			$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $config['ldap']['ldap_filter'],
 				array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail'));
 			if ($result_id) {
 				$users = ldap_get_entries($link_id, $result_id);
@@ -75,25 +84,37 @@ function getUsers($config) {
 }
 
 # update/insert all valid users into the database
-function updateUsers($dbh, $users, $skip_ou_list, $updated) {
-	$count = $users['count'];
+function updateUsers($users) {
+	global $config, $dbh, $updated;
+	$totalUsers = $users['count'];
+	$regularUsers = 0;
+	$contractUsers = 0;
 	$skip_ous = array();
 	if ($skip_ou_list) {
-		$skip_ous = split(',', $skip_ou_list);
+		$skip_ous = split(',', $config['ldap']['ldap_skip_ou_list']);
 	}
 	foreach ($users as $key => $user) {
 		if (is_int($key)) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
 					error_log(date('c') . " action=skipping_user reason=ou dn=\"{$user['dn']} ou=$ou");
-					$count--;
+					$totalUsers--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
 				error_log(date('c') . " action=skipping_user reason=missing_attributes dn=\"{$user['dn']}");
-				$count--;
+				$totalUsers--;
 				continue;
+			}
+			
+			$type = getUserType($user['dn'], $user['cn']);
+			if ($type == "Regular") {
+				$regularUsers++;
+			} elseif ($type == "Contractor") {
+				$contractUsers++;
+			} else {
+				error_log(date('c') . "action=unknown_type dn=\"{$user['dn']}\" type=\"$type\"");
 			}
 			
 			error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
@@ -108,11 +129,12 @@ function updateUsers($dbh, $users, $skip_ou_list, $updated) {
 		}
 	}
 	
-	return $count;
+	return array($totalUsers, $regularUsers, $contractUsers);
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
-function processDeadUsers($config, $dbh, $updated) {
+function processDeadUsers() {
+	global $config, $dbh, $updated;
 	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
 	$dead_users = $result->fetchAll(PDO::FETCH_ASSOC);
@@ -123,9 +145,9 @@ function processDeadUsers($config, $dbh, $updated) {
 		$sth = $dbh->prepare("UPDATE deathwatch SET dead = 1 WHERE id = ?");
 		$sth->execute(array($dead_user['id']));
 		error_log (date('c') . " action=dead_user dn=\"{$dead_user['dn']}\"");
+		$type = getUserType($dead_user['dn'], $dead_user['cn']);
 		$result = notifyHipchat(
-			$config, 
-			"goodbye {$dead_user['cn']} ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']} at {$dead_user['location']}",
+			"goodbye {$dead_user['cn']} - $userType - ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']} at {$dead_user['location']}",
 			"red");
 		if ($result) {
 			error_log(date('c') . ' action=hipchat_notification message="' . addcslashes($result, '"') . '"');
@@ -138,7 +160,8 @@ function processDeadUsers($config, $dbh, $updated) {
 }
 
 # any users with created time that is later than updated time are new. send a notification.
-function processNewUsers($config, $dbh) {
+function processNewUsers() {
+	global $config, $dbh;
 	$result = $dbh->query("SELECT dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
 	$new_users = $result->fetchAll(PDO::FETCH_ASSOC);
@@ -146,9 +169,9 @@ function processNewUsers($config, $dbh) {
 	foreach ($new_users as $new_user) {
 		$count++;
 		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
+		$type = getUserType($new_user['dn'], $new_user['cn']);
 		$result = notifyHipchat(
-			$config,
-			"welcome {$new_user['cn']} ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at {$new_user['location']}",
+			"welcome {$new_user['cn']} - $userType - ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at {$new_user['location']}",
 			"green");
 		if ($result) {
 			error_log(date('c') . ' action=hipchat_notification message="' . addcslashes($result, '"') . '"');
@@ -159,8 +182,9 @@ function processNewUsers($config, $dbh) {
 	return $count;
 }
 
-function notifyHipchat($config, $message, $color) {
-	$url = "{$config['hipchat_url']}/v2/room/{$config['hipchat_room']}/notification?auth_token={$config['hipchat_token']}";
+function notifyHipchat($message, $color) {
+	global $config;
+	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat_room']}/notification?auth_token={$config['hipchat']['hipchat_token']}";
 	#TODO escape $message properly
 	$data = "{\"color\":\"$color\", \"message\":\"$message\", \"notify\": true}";
 
@@ -175,4 +199,22 @@ function notifyHipchat($config, $message, $color) {
 	$result = curl_exec($ch);
 	curl_close($ch);
 	return $result;
+}
+
+function getUserType($dn, $cn) {
+	global $config;
+	if (strstr($dn, "OU=Standard") !== FALSE) {
+		$type = "Regular";
+	} elseif (strstr($dn, "OU=Contractor") !== FALSE) {
+		$type = "Contractor";
+	} else {
+		$type = str_replace(",{$config['ldap']['ldap_base_dn']}", "", $dn);
+		$type = str_replace("CN=$cn,", "", $type);
+	}
+	
+	return $type;
+}
+
+function logger($fields) {
+	
 }
