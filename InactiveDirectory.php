@@ -14,14 +14,14 @@ $dbh = new PDO("sqlite:" . __DIR__ . '/deathwatch.sq3');
 
 $firstRun = setupDatabase();
 if ($firstRun) {
-    error_log(date('c') . ' action=first_run');
+	logger(array('step' => 'setupDatabase', 'action' => 'first_run', 'status' => 'success'));
 }
 
 $users = getUsers();
 if ($users) {
-	error_log(date('c') . " action=ldapsearch count={$users['count']}");
-	list($totalUsers, $regularUsers, $contractUsers) = updateUsers($users);
-	error_log(date('c') . " action=update_complete count=$count");
+	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
+	list($totalUsers, $regularUsers, $contractUsers, $otherUsers) = updateUsers($users);
+	logger(array('step' => 'updateUsers', 'status' => 'success', 'count' => $totalUsers));
 	if ($firstRun) {
 		notifyHipchat("first run. $count users.", "yellow");
 	} else {
@@ -33,10 +33,10 @@ if ($users) {
 		if ($newCount) {
 			notifyHipchat("$newCount users added.", "green");
 		}
-		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors.", "yellow");
+		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
 	}
 } else {
-	error_log(date('c') . ' action=users message="no users"');
+	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
 }
 
 # create the table on first run
@@ -89,6 +89,7 @@ function updateUsers($users) {
 	$totalUsers = $users['count'];
 	$regularUsers = 0;
 	$contractUsers = 0;
+	$otherUsers = 0;
 	$skip_ous = array();
 	if ($skip_ou_list) {
 		$skip_ous = split(',', $config['ldap']['ldap_skip_ou_list']);
@@ -97,13 +98,13 @@ function updateUsers($users) {
 		if (is_int($key)) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
-					error_log(date('c') . " action=skipping_user reason=ou dn=\"{$user['dn']} ou=$ou");
+					logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou', 'dn' => $user['dn'], 'ou' => $ou));
 					$totalUsers--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
-				error_log(date('c') . " action=skipping_user reason=missing_attributes dn=\"{$user['dn']}");
+				logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes', 'dn' => $user['dn']));
 				$totalUsers--;
 				continue;
 			}
@@ -114,10 +115,10 @@ function updateUsers($users) {
 			} elseif ($type == "Contractor") {
 				$contractUsers++;
 			} else {
-				error_log(date('c') . "action=unknown_type dn=\"{$user['dn']}\" type=\"$type\"");
+				$otherUsers++;
 			}
 			
-			error_log(date('c') . " action=update_user dn=\"{$user['dn']}\"");
+			logger(array('step' => 'updateUser', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
@@ -126,10 +127,11 @@ function updateUsers($users) {
 				. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
 				$location, $mail, $user['dn'], $updated));
+			logger(array('step' => 'updateUser', 'action' => 'post_update', 'status' => 'success', 'dn' => $user['dn']));
 		}
 	}
 	
-	return array($totalUsers, $regularUsers, $contractUsers);
+	return array($totalUsers, $regularUsers, $contractUsers, $otherUsers);
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
@@ -146,14 +148,9 @@ function processDeadUsers() {
 		$sth->execute(array($dead_user['id']));
 		error_log (date('c') . " action=dead_user dn=\"{$dead_user['dn']}\"");
 		$type = getUserType($dead_user['dn'], $dead_user['cn']);
-		$result = notifyHipchat(
+		notifyHipchat(
 			"goodbye {$dead_user['cn']} - $userType - ({$dead_user['mail']}), {$dead_user['title']} in {$dead_user['department']} at {$dead_user['location']}",
 			"red");
-		if ($result) {
-			error_log(date('c') . ' action=hipchat_notification message="' . addcslashes($result, '"') . '"');
-		} elseif ($result === FALSE) {
-			error_log(date('c') . ' action=hipchat_notification message="notification failed"');
-		}
 	}
 	
 	return $count;
@@ -170,14 +167,9 @@ function processNewUsers() {
 		$count++;
 		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
 		$type = getUserType($new_user['dn'], $new_user['cn']);
-		$result = notifyHipchat(
+		notifyHipchat(
 			"welcome {$new_user['cn']} - $userType - ({$new_user['mail']}), {$new_user['title']} in {$new_user['department']} at {$new_user['location']}",
 			"green");
-		if ($result) {
-			error_log(date('c') . ' action=hipchat_notification message="' . addcslashes($result, '"') . '"');
-		} elseif ($result === FALSE) {
-			error_log(date('c') . ' action=hipchat_notification message="notification failed"');
-		}
 	}
 	return $count;
 }
@@ -198,7 +190,11 @@ function notifyHipchat($message, $color) {
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
 	$result = curl_exec($ch);
 	curl_close($ch);
-	return $result;
+	if ($result) {
+		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => $result));
+	} elseif ($result === FALSE) {
+		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => 'notification failed'));
+	}
 }
 
 function getUserType($dn, $cn) {
@@ -210,11 +206,16 @@ function getUserType($dn, $cn) {
 	} else {
 		$type = str_replace(",{$config['ldap']['ldap_base_dn']}", "", $dn);
 		$type = str_replace("CN=$cn,", "", $type);
+		logger(array('step' => 'getUserType', 'status' => 'failure', 'dn' => $dn, 'type' => $type));
 	}
 	
 	return $type;
 }
 
 function logger($fields) {
-	
+	$event = date('c');
+	foreach ($fields as $field => $value) {
+		$event .= " $field=\"" . addcslashes($value, '"') . '"' ;
+	}
+	error_log($event);
 }
