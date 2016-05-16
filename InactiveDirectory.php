@@ -30,6 +30,11 @@ if ($users) {
 		list($updatedUsers, $deadUsers, $newUsers) = findUpdatedUsers($deadUsers, $newUsers);
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
+		if ($deadUsers || $newUsers || $updatedUsers) {
+			notifyHipchat(
+				"$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.",
+				"yellow");
+		}
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -94,13 +99,15 @@ function updateUsers($users) {
 		if (is_int($key)) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
-					logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou', 'dn' => $user['dn'], 'ou' => $ou));
+					logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou',
+						'dn' => $user['dn'], 'ou' => $ou));
 					$totalUsers--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
-				logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes', 'dn' => $user['dn']));
+				logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes',
+					'dn' => $user['dn']));
 				$totalUsers--;
 				continue;
 			}
@@ -183,11 +190,11 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 	foreach ($updatedUsers as $updatedUser) {
 		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn']);
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
-		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}\n";
-		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}\n";
+		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}\\n";
+		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}\\n";
 		foreach (array('mail', 'title', 'department', 'location') as $field) {
 			if ($updatedUser['dead'][$field] != $updatedUser['new'][$field]) {
-				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\n";
+				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\\n";
 			}
 		}
 			
@@ -220,14 +227,12 @@ function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
 	if ($newUsers) {
 		notifyHipchat(count($newUsers) . " users added.", "green");
 	}
-	if ($deadUsers || $newUsers || $updatedUsers) {
-		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
-	}
 }
 
 function notifyHipchat($message, $color) {
 	global $config;
-	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?auth_token={$config['hipchat']['hipchat_token']}";
+	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?"
+		. "auth_token={$config['hipchat']['hipchat_token']}";
 	#TODO escape $message properly
 	$data = "{\"color\":\"$color\", \"message\":\"$message\", \"notify\": true}";
 
