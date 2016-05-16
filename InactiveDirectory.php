@@ -27,7 +27,7 @@ if ($users) {
 	} else {
 		$deadUsers = getAndMarkDeadUsers();
 		$newUsers = getNewUsers();
-		list($updatedUsers, $deadUsers, $newUsers) = findUpdatedUsers($deadUsers, $newUsers);
+		list($updatedUsers, $deadUsers, $newUsers) = getUpdatedUsers($deadUsers, $newUsers);
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 		if ($deadUsers || $newUsers || $updatedUsers) {
@@ -147,7 +147,7 @@ function getAndMarkDeadUsers() {
 		# TODO: don't send goodbye w/o checking for errors
 		$sth = $dbh->prepare("UPDATE deathwatch SET dead = 1 WHERE id = ?");
 		$sth->execute(array($deadUser['id']));
-		error_log (date('c') . " action=dead_user dn=\"{$deadUser['dn']}\"");
+		logger(array('step' => 'getAndMarkDeadUsers', 'action' => 'mark', 'status' => 'success', 'dn' => $deadUser['dn']));
 	}
 	
 	return $deadUsers;
@@ -160,12 +160,12 @@ function getNewUsers() {
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
 	$newUsers = $result->fetchAll(PDO::FETCH_ASSOC);
 	foreach ($newUsers as $newUser) {
-		error_log(date('c') . " action=new_user dn=\"{$newUser['dn']}\"");
+		logger(array('step' => 'getNewUsers', 'action' => 'get', 'status' => 'success', 'dn' => $newUser['dn']));
 	}
 	return $newUsers;
 }
 
-function findUpdatedUsers($deadUsers, $newUsers) {
+function getUpdatedUsers($deadUsers, $newUsers) {
 	$updatedUsers = array();
 	# If we have the same CN in both dead and new, we should log it as an update
 	if ($deadUsers && $newUsers) {
@@ -178,6 +178,7 @@ function findUpdatedUsers($deadUsers, $newUsers) {
 					);
 					unset($deadUsers[$deadKey]);
 					unset($newUsers[$newKey]);
+					logger(array('step' => 'findUpdatedUsers', 'action' => 'get', 'status' => 'success', 'dn' => $newUser['dn']));
 				}
 			}
 		}
