@@ -33,7 +33,9 @@ if ($users) {
 		if ($newCount) {
 			notifyHipchat("$newCount users added.", "green");
 		}
-		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
+		if ($deadCount || $newCount) {
+			notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
+		}
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -159,7 +161,7 @@ function processDeadUsers() {
 
 # any users with created time that is later than updated time are new. send a notification.
 function processNewUsers() {
-	global $config, $dbh;
+	global $dbh;
 	$result = $dbh->query("SELECT dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
 	$new_users = $result->fetchAll(PDO::FETCH_ASSOC);
