@@ -25,17 +25,11 @@ if ($users) {
 	if ($firstRun) {
 		notifyHipchat("first run. $count users.", "yellow");
 	} else {
-		$deadCount = processDeadUsers();
-		$newCount = processNewUsers();
-		if ($deadCount) {
-			notifyHipchat("$deadCount users removed.", "red");
-		}
-		if ($newCount) {
-			notifyHipchat("$newCount users added.", "green");
-		}
-		if ($deadCount || $newCount) {
-			notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
-		}
+		$deadUsers = getAndMarkDeadUsers();
+		$newUsers = getNewUsers();
+		list($updatedUsers, $deadUsers, $newUsers) = findUpdatedUsers($deadUsers, $newUsers);
+		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
+		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -137,45 +131,98 @@ function updateUsers($users) {
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
-function processDeadUsers() {
-	global $config, $dbh, $updated;
+function getAndMarkDeadUsers() {
+	global $dbh, $updated;
 	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, created"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
-	$dead_users = $result->fetchAll(PDO::FETCH_ASSOC);
-	$count = 0;
-	foreach ($dead_users as $dead_user) {
-		$count++;
+	$deadUsers = $result->fetchAll(PDO::FETCH_ASSOC);
+	foreach ($deadUsers as $deadUser) {
 		# TODO: don't send goodbye w/o checking for errors
 		$sth = $dbh->prepare("UPDATE deathwatch SET dead = 1 WHERE id = ?");
-		$sth->execute(array($dead_user['id']));
-		error_log (date('c') . " action=dead_user dn=\"{$dead_user['dn']}\"");
-		$type = getUserType($dead_user['dn'], $dead_user['cn']);
-		notifyHipchat(
-			"goodbye {$dead_user['cn']}, $type, {$dead_user['mail']}, {$dead_user['title']} in {$dead_user['department']}"
-				. " at {$dead_user['location']} joined on {$dead_user['created']}",
-			"red");
+		$sth->execute(array($deadUser['id']));
+		error_log (date('c') . " action=dead_user dn=\"{$deadUser['dn']}\"");
 	}
 	
-	return $count;
+	return $deadUsers;
 }
 
 # any users with created time that is later than updated time are new. send a notification.
-function processNewUsers() {
+function getNewUsers() {
 	global $dbh;
 	$result = $dbh->query("SELECT dn, cn, title, department, location, mail"
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
-	$new_users = $result->fetchAll(PDO::FETCH_ASSOC);
-	$count = 0;
-	foreach ($new_users as $new_user) {
-		$count++;
-		error_log(date('c') . " action=new_user dn=\"{$new_user['dn']}\"");
-		$type = getUserType($new_user['dn'], $new_user['cn']);
+	$newUsers = $result->fetchAll(PDO::FETCH_ASSOC);
+	foreach ($newUsers as $newUser) {
+		error_log(date('c') . " action=new_user dn=\"{$newUser['dn']}\"");
+	}
+	return $newUsers;
+}
+
+function findUpdatedUsers($deadUsers, $newUsers) {
+	$updatedUsers = array();
+	# If we have the same CN in both dead and new, we should log it as an update
+	if ($deadUsers && $newUsers) {
+		foreach ($deadUsers as $deadKey => $deadUser) {
+			foreach ($newUsers as $newKey => $newUser) {
+				if ($deadUser['cn'] == $newUser['cn']) {
+					$updatedUsers[] = array(
+						'dead' => $deadUser,
+						'new' => $newUser,
+					);
+					unset($deadUsers[$deadKey]);
+					unset($newUsers[$newKey]);
+				}
+			}
+		}
+	}
+	
+	return array($updatedUsers, $deadUsers, $newUsers);
+}
+
+function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
+	foreach ($updatedUsers as $updatedUser) {
+		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn']);
+		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
+		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}\n";
+		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}\n";
+		foreach (array('mail', 'title', 'department', 'location') as $field) {
+			if ($updatedUser['dead'][$field] != $updatedUser['new'][$field]) {
+				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\n";
+			}
+		}
+			
+		notifyHipchat($notification, "yellow");
+	}
+	foreach ($deadUsers as $deadUser) {
+		$type = getUserType($deadUser['dn'], $deadUser['cn']);
 		notifyHipchat(
-			"welcome {$new_user['cn']}, $type, {$new_user['mail']}, {$new_user['title']} in {$new_user['department']} at"
-				. " {$new_user['location']}",
+			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
+				. " at {$deadUser['location']} joined on {$deadUser['created']}",
+			"red");
+	}
+	foreach ($newUsers as $newUser) {
+		$type = getUserType($newUser['dn'], $newUser['cn']);
+		notifyHipchat(
+			"welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
+				. " {$newUser['location']}",
 			"green");
 	}
-	return $count;
+}
+
+function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
+	# Notification summaries
+	if ($updatedUsers) {
+		notifyHipchat(count($updatedUsers) . " users updated.", "yellow");
+	}
+	if ($deadUsers) {
+		notifyHipchat(count($deadUsers) . " users removed.", "red");
+	}
+	if ($newUsers) {
+		notifyHipchat(count($newUsers) . " users added.", "green");
+	}
+	if ($deadUsers || $newUsers || $updatedUsers) {
+		notifyHipchat("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.", "yellow");
+	}
 }
 
 function notifyHipchat($message, $color) {
