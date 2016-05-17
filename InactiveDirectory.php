@@ -55,8 +55,9 @@ function setUpDatabase() {
 			"department TEXT,
 			"location" TEXT,
 			"mail" TEXT,
-			"created" NUMERIC NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			"updated" NUMERIC,
+			"hired" DATETIME,
+			"created" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			"updated" DATETIME,
 			"dead" INTEGER NOT NULL DEFAULT 0
 		);');
 		$firstRun = TRUE;
@@ -73,7 +74,7 @@ function getUsers() {
 	if (ldap_set_option($link_id, LDAP_OPT_PROTOCOL_VERSION, 3)) {
 		if (ldap_bind($link_id, $config['ldap']['ldap_bind_user'], $config['ldap']['ldap_bind_password'])) {
 			$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $config['ldap']['ldap_filter'],
-				array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail'));
+				array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail', 'hireDateCustom'));
 			if ($result_id) {
 				$users = ldap_get_entries($link_id, $result_id);
 			}
@@ -124,12 +125,17 @@ function updateUsers($users) {
 			logger(array('step' => 'updateUser', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
+			$hireDate = '';
+			if (isset($user['hiredatecustom'][0])) {
+				$hireDateParts = explode('/', $user['hiredatecustom'][0]);
+				$hireDate = date('Y-m-d', mktime(0, 0, 0, $hireDateParts[0], $hireDateParts[1], $hireDateParts[2]));
+			}	
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
-				. " (id, dn, cn, title, department, location, mail, created, updated)"
-				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?,"
+				. " (id, dn, cn, title, department, location, mail, hired, created, updated)"
+				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?, date(?),"
 				. " (SELECT created FROM deathwatch WHERE dn = ?), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-				$location, $mail, $user['dn'], $updated));
+				$location, $mail, $hireDate, $user['dn'], $updated));
 			logger(array('step' => 'updateUser', 'action' => 'post_update', 'status' => 'success', 'dn' => $user['dn']));
 		}
 	}
@@ -140,7 +146,7 @@ function updateUsers($users) {
 # any users that were not just updated are dead. mark them dead. send a notification.
 function getAndMarkDeadUsers() {
 	global $dbh, $updated;
-	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, created"
+	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, hired"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
 	$deadUsers = $result->fetchAll(PDO::FETCH_ASSOC);
 	foreach ($deadUsers as $deadUser) {
@@ -206,7 +212,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		$type = getUserType($deadUser['dn'], $deadUser['cn']);
 		notifyHipchat(
 			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
-				. " at {$deadUser['location']} joined on {$deadUser['created']}",
+				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
 			"red");
 	}
 	foreach ($newUsers as $newUser) {
