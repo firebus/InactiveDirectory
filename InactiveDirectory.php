@@ -178,7 +178,7 @@ function getUpdatedUsers($deadUsers, $newUsers) {
 		foreach ($deadUsers as $deadKey => $deadUser) {
 			foreach ($newUsers as $newKey => $newUser) {
 				if ($deadUser['cn'] == $newUser['cn']
-					|| $deadUser['mail'] = $newUser['mail']) {
+					|| $deadUser['mail'] == $newUser['mail']) {
 					$updatedUsers[] = array(
 						'dead' => $deadUser,
 						'new' => $newUser,
