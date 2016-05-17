@@ -171,7 +171,8 @@ function getUpdatedUsers($deadUsers, $newUsers) {
 	if ($deadUsers && $newUsers) {
 		foreach ($deadUsers as $deadKey => $deadUser) {
 			foreach ($newUsers as $newKey => $newUser) {
-				if ($deadUser['cn'] == $newUser['cn']) {
+				if ($deadUser['cn'] == $newUser['cn']
+					|| $deadUser['mail'] = $newUser['mail']) {
 					$updatedUsers[] = array(
 						'dead' => $deadUser,
 						'new' => $newUser,
@@ -193,7 +194,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
 		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}\\n";
 		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}\\n";
-		foreach (array('mail', 'title', 'department', 'location') as $field) {
+		foreach (array('cn', 'mail', 'title', 'department', 'location') as $field) {
 			if ($updatedUser['dead'][$field] != $updatedUser['new'][$field]) {
 				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\\n";
 			}
