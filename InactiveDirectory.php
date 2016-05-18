@@ -169,7 +169,7 @@ function getNewUsers() {
 }
 
 function getUpdatedUsers($deadUsers, $newUsers) {
-	global $dbh, $updated;
+	global $dbh;
 	$updatedUsers = array();
 	# If we have the same CN in both dead and new, we should log it as an update
 	if ($deadUsers && $newUsers) {
@@ -183,7 +183,7 @@ function getUpdatedUsers($deadUsers, $newUsers) {
 					);
 					unset($deadUsers[$deadKey]);
 					unset($newUsers[$newKey]);
-					$sth = $dbh->prepare("UPDATE deathwatch SET new_user = ? WHERE id = ?");
+					$sth = $dbh->prepare("UPDATE deathwatch SET new_id = ? WHERE id = ?");
 					$sth->execute(array($newUser['id'], $deadUser['id']));
 					logger(array('step' => 'findUpdatedUsers', 'action' => 'get', 'status' => 'success', 'dn' => $newUser['dn']));
 				}
@@ -289,9 +289,9 @@ function calculateHireDate($user) {
 	if (isset($user['hiredatecustom'][0])) {
 		$hireDateParts = explode('/', $user['hiredatecustom'][0]);
 		$hireDate = date('Y-m-d', mktime(0, 0, 0, $hireDateParts[0], $hireDateParts[1], $hireDateParts[2]));
-		logger(array('step' => 'calculateHireDate', 'action' => 'hiredatecustom', 'date' => $hireDate, 'ldap' => $user['hiredatecustomer'][0]));
+		logger(array('step' => 'calculateHireDate', 'action' => 'hiredatecustom', 'date' => $hireDate, 'ldap' => $user['hiredatecustom'][0]));
 	} elseif (isset($user['whencreated'][0])) {
-		$hireDate = substr($user['whencreated'][0], 0, 4) . '-' . substr($user['whencreated'][0], 3, 2) . '-' . substr($user['whencreated'][0], 5, 2);
+		$hireDate = substr($user['whencreated'][0], 0, 4) . '-' . substr($user['whencreated'][0], 4, 2) . '-' . substr($user['whencreated'][0], 6, 2);
 		logger(array('step' => 'calculateHireDate', 'action' => 'whencreated', 'date' => $hireDate, 'ldap' => $user['whencreated'][0]));
 	}
 
