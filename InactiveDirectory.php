@@ -10,8 +10,9 @@ $updated = time();
 
 # connect to database
 global $dbh;
-$dbh = new PDO("sqlite:" . __DIR__ . '/deathwatch.sq3');			
+$dbh = new PDO("sqlite:" . __DIR__ . '/deathwatch.sq3');
 
+logger(array('step' => 'main', 'action' => 'start'));
 $firstRun = setupDatabase();
 if ($firstRun) {
 	logger(array('step' => 'setupDatabase', 'action' => 'first_run', 'status' => 'success'));
@@ -39,6 +40,7 @@ if ($users) {
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
 }
+logger(array('step' => 'main', 'action' => 'finish'));
 
 # create the table on first run
 function setUpDatabase() {
@@ -207,26 +209,33 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\\n";
 			}
 		}
-			
-		notifyHipchat($notification, "yellow");
+		$result = notifyHipchat($notification, "yellow");
+		logger(array(
+			'step' => 'sendUserNotifications', 'action' => 'updated', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($deadUsers as $deadUser) {
 		$type = getUserType($deadUser['dn'], $deadUser['cn']);
-		notifyHipchat(
+		$result = notifyHipchat(
 			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
 				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
 			"red");
+		logger(array(
+			'step' => 'sendUserNotifications', 'action' => 'dead', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn']);
-		notifyHipchat(
+		$result = notifyHipchat(
 			"welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
 				. " {$newUser['location']}",
 			"green");
+		logger(array(
+			'step' => 'sendUserNotifications', 'action' => 'new', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
 	}
 }
 
 function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
+	logger(array('step' => 'sendSummaryNotifications', 'action' => 'summary', 'updated' => count($updatedUsers),
+		'dead' => count($deadUsers), 'new' => count($newUsers)));
 	# Notification summaries
 	if ($updatedUsers) {
 		notifyHipchat(count($updatedUsers) . " users updated.", "yellow");
@@ -241,6 +250,7 @@ function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
 
 function notifyHipchat($message, $color) {
 	global $config;
+	$result = TRUE;
 	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?"
 		. "auth_token={$config['hipchat']['hipchat_token']}";
 	#TODO escape $message properly
@@ -258,9 +268,12 @@ function notifyHipchat($message, $color) {
 	curl_close($ch);
 	if ($result) {
 		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => $result));
+		$result = FALSE;
 	} elseif ($result === FALSE) {
 		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => 'notification failed'));
+		$result = FALSE;
 	}
+	return $result;
 }
 
 function getUserType($dn, $cn) {
