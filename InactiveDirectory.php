@@ -97,6 +97,7 @@ function updateUsers($users) {
 	if ($config['ldap']['ldap_skip_ou_list']) {
 		$skip_ous = split(',', $config['ldap']['ldap_skip_ou_list']);
 	}
+	$dbh->query('BEGIN EXCLUSIVE TRANSACTION');
 	foreach ($users as $key => $user) {
 		if (is_int($key)) {
 			foreach ($skip_ous as $ou) {
@@ -136,6 +137,7 @@ function updateUsers($users) {
 			logger(array('step' => 'updateUser', 'action' => 'post_update', 'status' => 'success', 'dn' => $user['dn']));
 		}
 	}
+	$dbh->query('COMMIT TRANSACTION');
 	
 	return array($totalUsers, $regularUsers, $contractUsers, $otherUsers);
 }
