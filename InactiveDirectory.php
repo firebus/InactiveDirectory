@@ -202,11 +202,11 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 	foreach ($updatedUsers as $updatedUser) {
 		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn']);
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
-		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}\\n";
-		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}\\n";
+		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}<br>";
+		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}<br>";
 		foreach (array('cn', 'mail', 'title', 'department', 'location') as $field) {
 			if ($updatedUser['dead'][$field] != $updatedUser['new'][$field]) {
-				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}\\n";
+				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}<br>";
 			}
 		}
 		$result = notifyHipchat($notification, "yellow");
