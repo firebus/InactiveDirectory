@@ -220,7 +220,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
 			"red");
 		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'dead', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
+			'step' => 'sendUserNotifications', 'action' => 'dead', 'status' => $result, 'dn' => $deadUser['dn']));
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn']);
@@ -229,7 +229,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				. " {$newUser['location']}",
 			"green");
 		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'new', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
+			'step' => 'sendUserNotifications', 'action' => 'new', 'status' => $result, 'dn' => $newUser['dn']));
 	}
 }
 
