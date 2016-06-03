@@ -22,7 +22,6 @@ $users = getUsers();
 if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
 	list($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers) = updateUsers($users);
-	logger(array('step' => 'updateUsers', 'status' => 'success', 'count' => $totalUsers));
 	if ($firstRun) {
 		notifyHipchat("first run. $count users.", "yellow");
 	} else {
@@ -105,14 +104,14 @@ function updateUsers($users) {
 		if (is_int($key)) {
 			foreach ($skip_ous as $ou) {
 				if (strstr($user['dn'], "OU=$ou")) {
-					logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou',
+					logger(array('step' => 'updateUsers', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou',
 						'dn' => $user['dn'], 'ou' => $ou));
 					$totalUsers--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
-				logger(array('step' => 'updateUser', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes',
+				logger(array('step' => 'updateUsers', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes',
 					'dn' => $user['dn']));
 				$totalUsers--;
 				continue;
@@ -133,7 +132,7 @@ function updateUsers($users) {
 					$otherUsers++;
 			}
 			
-			logger(array('step' => 'updateUser', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
+			logger(array('step' => 'updateUsers', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$hireDate = calculateHireDate($user);
@@ -143,12 +142,11 @@ function updateUsers($users) {
 				. " (SELECT created FROM deathwatch WHERE dn = ? AND dead = 0), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
 				$location, $mail, $hireDate, $user['dn'], $updated));
-			logger(array('step' => 'updateUser', 'action' => 'post_update', 'status' => 'success', 'dn' => $user['dn']));
 		}
 	}
 	$dbh->query('COMMIT TRANSACTION');
 	
-	logger(array('step' => 'updateUser', 'action' => 'finish', 'status' => 'success', 'total' => $totalUsers,
+	logger(array('step' => 'updateUsers', 'action' => 'finish', 'status' => 'success', 'total' => $totalUsers,
 		'regular' => $regularUsers, 'contractor' => $contractUsers, 'intern' => $internUsers, 'other' => $otherUsers));
 	return array($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers);
 }
