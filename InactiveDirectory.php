@@ -118,15 +118,19 @@ function updateUsers($users) {
 				continue;
 			}
 			
-			$type = getUserType($user['dn'], $user['cn']);
-			if (strstr($user['title'], 'Intern') !== FALSE) {
-				$internUsers++;
-			} elseif ($type == "Regular") {
-				$regularUsers++;
-			} elseif ($type == "Contractor") {
-				$contractUsers++;
-			} else {
-				$otherUsers++;
+			$type = getUserType($user['dn'], $user['cn'], $user['title'][0]);
+			switch ($type) {
+				case 'Intern':
+					$internUsers++;
+					break;
+				case 'Regular':
+					$regularUsers++;
+					break;
+				case 'Contractor':
+					$contractUsers++;
+					break;
+				default:
+					$otherUsers++;
 			}
 			
 			logger(array('step' => 'updateUser', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
@@ -144,6 +148,8 @@ function updateUsers($users) {
 	}
 	$dbh->query('COMMIT TRANSACTION');
 	
+	logger(array('step' => 'updateUser', 'action' => 'finish', 'status' => 'success', 'total' => $totalUsers,
+		'regular' => $regularUsers, 'contractor' => $contractUsers, 'intern' => $internUsers, 'other' => $otherUsers));
 	return array($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers);
 }
 
@@ -203,7 +209,7 @@ function getUpdatedUsers($deadUsers, $newUsers) {
 
 function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 	foreach ($updatedUsers as $updatedUser) {
-		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn']);
+		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn'], $updatedUser['new']['title']);
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
 		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}<br>";
 		foreach (array('cn', 'mail', 'title', 'department', 'location') as $field) {
@@ -216,7 +222,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 			'step' => 'sendUserNotifications', 'action' => 'updated', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($deadUsers as $deadUser) {
-		$type = getUserType($deadUser['dn'], $deadUser['cn']);
+		$type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
 		$result = notifyHipchat(
 			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
 				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
@@ -225,7 +231,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 			'step' => 'sendUserNotifications', 'action' => 'dead', 'status' => $result, 'dn' => $deadUser['dn']));
 	}
 	foreach ($newUsers as $newUser) {
-		$type = getUserType($newUser['dn'], $newUser['cn']);
+		$type = getUserType($newUser['dn'], $newUser['cn'], $newUser['title']);
 		$result = notifyHipchat(
 			"welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
 				. " {$newUser['location']}",
@@ -278,11 +284,13 @@ function notifyHipchat($message, $color) {
 	return $result;
 }
 
-function getUserType($dn, $cn) {
+function getUserType($dn, $cn, $title) {
 	global $config;
-	if (strstr($dn, "OU=Standard") !== FALSE) {
+	if (strpos($title, 'Intern') !== FALSE) {
+		$type = 'Intern';
+	} elseif (strpos($dn, "OU=Standard") !== FALSE) {
 		$type = "Regular";
-	} elseif (strstr($dn, "OU=Contractor") !== FALSE) {
+	} elseif (strpos($dn, "OU=Contractors") !== FALSE) {
 		$type = "Contractor";
 	} else {
 		$type = str_replace(",{$config['ldap']['ldap_base_dn']}", "", $dn);
