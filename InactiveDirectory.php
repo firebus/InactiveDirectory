@@ -21,7 +21,7 @@ if ($firstRun) {
 $users = getUsers();
 if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
-	list($totalUsers, $regularUsers, $contractUsers, $otherUsers) = updateUsers($users);
+	list($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers) = updateUsers($users);
 	logger(array('step' => 'updateUsers', 'status' => 'success', 'count' => $totalUsers));
 	if ($firstRun) {
 		notifyHipchat("first run. $count users.", "yellow");
@@ -33,7 +33,7 @@ if ($users) {
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 		if ($deadUsers || $newUsers || $updatedUsers) {
 			notifyHipchat(
-				"$totalUsers total users. $regularUsers regular, $contractUsers contractors, $otherUsers uncategorized.",
+				"$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns, $otherUsers uncategorized.",
 				"yellow");
 		}
 	}
@@ -94,6 +94,7 @@ function updateUsers($users) {
 	$totalUsers = $users['count'];
 	$regularUsers = 0;
 	$contractUsers = 0;
+	$internUsers = 0;
 	$otherUsers = 0;
 	$skip_ous = array();
 	if ($config['ldap']['ldap_skip_ou_list']) {
@@ -118,7 +119,9 @@ function updateUsers($users) {
 			}
 			
 			$type = getUserType($user['dn'], $user['cn']);
-			if ($type == "Regular") {
+			if (strstr($user['title'], 'Intern') !== FALSE) {
+				$internUsers++;
+			} elseif ($type == "Regular") {
 				$regularUsers++;
 			} elseif ($type == "Contractor") {
 				$contractUsers++;
@@ -141,7 +144,7 @@ function updateUsers($users) {
 	}
 	$dbh->query('COMMIT TRANSACTION');
 	
-	return array($totalUsers, $regularUsers, $contractUsers, $otherUsers);
+	return array($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers);
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
@@ -203,7 +206,6 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn']);
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
 		. " {$updatedUser['new']['title']} in {$updatedUser['new']['department']} at {$updatedUser['new']['location']}<br>";
-		$notification .= "dn was {$updatedUser['dead']['dn']} now {$updatedUser['new']['dn']}<br>";
 		foreach (array('cn', 'mail', 'title', 'department', 'location') as $field) {
 			if ($updatedUser['dead'][$field] != $updatedUser['new'][$field]) {
 				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}<br>";
