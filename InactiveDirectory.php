@@ -217,7 +217,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		}
 		$result = notifyHipchat($notification, "yellow");
 		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'updated', 'status' => $result, 'dn' => $updatedUser['new']['dn']));
+			'step' => 'sendUserNotifications', 'action' => 'updated', 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($deadUsers as $deadUser) {
 		$type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
@@ -226,7 +226,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
 			"red");
 		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'dead', 'status' => $result, 'dn' => $deadUser['dn']));
+			'step' => 'sendUserNotifications', 'action' => 'dead', 'dn' => $deadUser['dn']));
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn'], $newUser['title']);
@@ -235,7 +235,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				. " {$newUser['location']}",
 			"green");
 		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'new', 'status' => $result, 'dn' => $newUser['dn']));
+			'step' => 'sendUserNotifications', 'action' => 'new', 'dn' => $newUser['dn']));
 	}
 }
 
