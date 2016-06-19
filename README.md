@@ -13,4 +13,9 @@ You'll need PHP and sqlite3. On ubuntu 12.04 I found I needed to install php5-ld
 	* ldap.ldap_filter: an ldap filter that should return a list of users. 
 	  It can be as simple as an OU or objectCategory, or can be a complicated filter designed to exclude invalid records
 	* ldap.ldap_skip_ou_list: A comma-separated (sorry) list of OUs that should be excluded from the records returned by the 
-	  filter. Don't include "OU=". We'll search DNs returned for OUs with these names, and will ignore any that match
+	  filter. Don't include "OU=". We'll search DNs returned for OUs with these names, and will ignore any that match.
+
+## Notification
+
+* To stdout
+* Optionally to a hipchat room
