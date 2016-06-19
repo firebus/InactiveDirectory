@@ -1,7 +1,5 @@
 <?php
 
-# ubuntu package requirements: php5-ldap, php5-sqlite, php5-curl
-
 global $config;
 $config = parse_ini_file('config.ini', TRUE);
 
@@ -23,7 +21,7 @@ if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
 	list($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers) = updateUsers($users);
 	if ($firstRun) {
-		notifyHipchat("first run. $count users.", "yellow");
+		notify("first run. $count users.", "yellow");
 	} else {
 		$deadUsers = getAndMarkDeadUsers();
 		$newUsers = getNewUsers();
@@ -31,7 +29,7 @@ if ($users) {
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 		if ($deadUsers || $newUsers || $updatedUsers) {
-			notifyHipchat(
+			notify(
 				"$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns, $otherUsers uncategorized.",
 				"yellow");
 		}
@@ -215,13 +213,13 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}<br>";
 			}
 		}
-		$result = notifyHipchat($notification, "yellow");
+		$result = notify($notification, "yellow");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'updated', 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($deadUsers as $deadUser) {
 		$type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
-		$result = notifyHipchat(
+		$result = notify(
 			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
 				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
 			"red");
@@ -230,7 +228,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn'], $newUser['title']);
-		$result = notifyHipchat(
+		$result = notify(
 			"welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
 				. " {$newUser['location']}",
 			"green");
@@ -244,40 +242,46 @@ function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
 		'dead' => count($deadUsers), 'new' => count($newUsers)));
 	# Notification summaries
 	if ($updatedUsers) {
-		notifyHipchat(count($updatedUsers) . " users updated.", "yellow");
+		notify(count($updatedUsers) . " users updated.", "yellow");
 	}
 	if ($deadUsers) {
-		notifyHipchat(count($deadUsers) . " users removed.", "red");
+		notify(count($deadUsers) . " users removed.", "red");
 	}
 	if ($newUsers) {
-		notifyHipchat(count($newUsers) . " users added.", "green");
+		notify(count($newUsers) . " users added.", "green");
 	}
 }
 
-function notifyHipchat($message, $color) {
+function notify($message, $color) {
 	global $config;
 	$result = TRUE;
-	$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?"
-		. "auth_token={$config['hipchat']['hipchat_token']}";
-	#TODO escape $message properly
-	$data = "{\"color\":\"$color\", \"message\":\"$message\", \"notify\": true}";
+	
+	echo "$message\n";
+	$result = '';
+	
+	if ($config['hipchat']['hipchat_enabled']) {
+		$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?"
+			. "auth_token={$config['hipchat']['hipchat_token']}";
+		#TODO escape $message properly
+		$data = "{\"color\":\"$color\", \"message\":\"$message\", \"notify\": true}";
 
-	//  Initiate curl
-	$ch = curl_init();
-	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-	curl_setopt($ch, CURLOPT_URL, $url);
-	curl_setopt($ch, CURLOPT_POST, TRUE);
-	curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-	$result = curl_exec($ch);
-	curl_close($ch);
-	if ($result) {
-		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => $result));
-		$result = FALSE;
-	} elseif ($result === FALSE) {
-		logger(array('step' => 'notifyHipchat', 'status' => 'failure', 'error' => 'notification failed'));
-		$result = FALSE;
+		//  Initiate curl
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_POST, TRUE);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+		$result = curl_exec($ch);
+		curl_close($ch);
+		if ($result) {
+			logger(array('step' => 'notify', 'status' => 'failure', 'error' => $result));
+			$result = FALSE;
+		} elseif ($result === FALSE) {
+			logger(array('step' => 'notify', 'status' => 'failure', 'error' => 'notification failed'));
+			$result = FALSE;
+		}
 	}
 	return $result;
 }
