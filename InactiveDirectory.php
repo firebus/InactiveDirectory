@@ -28,11 +28,8 @@ if ($users) {
 		list($updatedUsers, $deadUsers, $newUsers) = getUpdatedUsers($deadUsers, $newUsers);
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
-		if ($deadUsers || $newUsers || $updatedUsers) {
-			notify(
-				"$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns, $otherUsers uncategorized.",
-				"yellow");
-		}
+		notify("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns,"
+			. "$otherUsers uncategorized.", "yellow");
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
