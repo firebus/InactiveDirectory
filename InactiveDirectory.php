@@ -29,7 +29,7 @@ if ($users) {
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 		notify("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns,"
-			. "$otherUsers uncategorized.", "yellow");
+			. " $otherUsers uncategorized.", "yellow");
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -210,25 +210,23 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 				$notification .= "$field was {$updatedUser['dead'][$field]} now {$updatedUser['new'][$field]}<br>";
 			}
 		}
-		$result = notify($notification, "yellow");
+		notify($notification, "yellow", "update");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'updated', 'dn' => $updatedUser['new']['dn']));
 	}
 	foreach ($deadUsers as $deadUser) {
 		$type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
-		$result = notify(
-			"goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, {$deadUser['title']} in {$deadUser['department']}"
-				. " at {$deadUser['location']} was hired on {$deadUser['hired']}",
-			"red");
+		$notification = "goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, "
+		. "{$deadUser['title']} in {$deadUser['department']} at {$deadUser['location']} was hired on {$deadUser['hired']}";
+		notify($notification, "red", "goodbye");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'dead', 'dn' => $deadUser['dn']));
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn'], $newUser['title']);
-		$result = notify(
-			"welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
-				. " {$newUser['location']}",
-			"green");
+		$notification = "welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
+				. " {$newUser['location']}";
+		notify($notification, "green", "welcome");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'new', 'dn' => $newUser['dn']));
 	}
@@ -249,14 +247,15 @@ function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
 	}
 }
 
-function notify($message, $color) {
+function notify($message, $color, $type) {
 	global $config;
 	$result = TRUE;
 	
 	echo "$message\n";
-	$result = '';
 	
-	if ($config['hipchat']['hipchat_enabled']) {
+	if ($config['hipchat']['hipchat_enabled']
+		&& ($config['hipchat']['hipchat_goodbyes'] || $type != "goodbye")) {
+		$result = '';
 		$url = "{$config['hipchat']['hipchat_url']}/v2/room/{$config['hipchat']['hipchat_room']}/notification?"
 			. "auth_token={$config['hipchat']['hipchat_token']}";
 		#TODO escape $message properly

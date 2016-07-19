@@ -8,6 +8,7 @@ ldap_skip_ous = 'Ignored Users,Bad Users'
 
 [hipchat]
 hipchat_enabled = 1
+hipchat_goodbyes = 1
 hipchat_url = 'https://api.hipchat.example.com'
 hipchat_room = 'InactiveDirectory'
 hipchat_token = 'abc123'
