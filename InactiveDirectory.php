@@ -237,13 +237,13 @@ function sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers) {
 		'dead' => count($deadUsers), 'new' => count($newUsers)));
 	# Notification summaries
 	if ($updatedUsers) {
-		notify(count($updatedUsers) . " users updated.", "yellow");
+		notify(count($updatedUsers) . " users updated.", "yellow", "update");
 	}
 	if ($deadUsers) {
-		notify(count($deadUsers) . " users removed.", "red");
+		notify(count($deadUsers) . " users removed.", "red", "goodbye");
 	}
 	if ($newUsers) {
-		notify(count($newUsers) . " users added.", "green");
+		notify(count($newUsers) . " users added.", "green", "welcome");
 	}
 }
 
