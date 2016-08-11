@@ -92,7 +92,7 @@ function updateUsers($users) {
 	$otherUsers = 0;
 	$skip_ous = array();
 	if ($config['ldap']['ldap_skip_ou_list']) {
-		$skip_ous = split(',', $config['ldap']['ldap_skip_ou_list']);
+		$skip_ous = explode(',', $config['ldap']['ldap_skip_ou_list']);
 	}
 	$dbh->query('BEGIN EXCLUSIVE TRANSACTION');
 	foreach ($users as $key => $user) {
