@@ -29,7 +29,7 @@ if ($users) {
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
 		notify("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns,"
-			. " $otherUsers uncategorized.", "yellow");
+			. " $otherUsers uncategorized.", "yellow", "summary");
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -67,18 +67,26 @@ function getUsers() {
 	global $config;
 	# connnect to ldap
 	$link_id = ldap_connect($config['ldap']['ldap_host']);
-	$users = FALSE;
+	$users = array();
 	if (ldap_set_option($link_id, LDAP_OPT_PROTOCOL_VERSION, 3)) {
 		if (ldap_bind($link_id, $config['ldap']['ldap_bind_user'], $config['ldap']['ldap_bind_password'])) {
-			$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $config['ldap']['ldap_filter'],
-				array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail', 'hireDateCustom', 'whenCreated'));
-			if ($result_id) {
-				$users = ldap_get_entries($link_id, $result_id);
+			// KLUDGE: Make one request per letter because the ldap server I'm won't return more than 1000 results
+			//         and we don't have more than 1K per letter and the server does not seem to support paging.
+			$letters = range('A', 'Z');
+			foreach ($letters as $letter) {
+				$filter = "(&{$config['ldap']['ldap_filter']}(CN=$letter*))";
+				$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $filter,
+					array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail', 'hireDateCustom', 'whenCreated'));
+				if ($result_id) {
+					$users = array_merge($users, ldap_get_entries($link_id, $result_id));
+				}
+				
 			}
 			ldap_unbind($link_id);
 		}
 	}
 
+	$users['count'] = count($users) - 1;
 	return $users;
 }
 
