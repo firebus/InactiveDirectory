@@ -76,7 +76,7 @@ function getUsers() {
 			foreach ($letters as $letter) {
 				$filter = "(&{$config['ldap']['ldap_filter']}(CN=$letter*))";
 				$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $filter,
-					array('dn', 'cn', 'title', 'department', 'physicalDeliveryOfficeName', 'mail', 'hireDateCustom', 'whenCreated'));
+					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', 'hiredatecustom', 'whencreated'));
 				if ($result_id) {
 					$users = array_merge($users, ldap_get_entries($link_id, $result_id));
 				}
@@ -120,7 +120,7 @@ function updateUsers($users) {
 				continue;
 			}
 			
-			$type = getUserType($user['dn'], $user['cn'], $user['title'][0]);
+			$type = getUserType($user['dn'], $user['cn'][0], $user['title'][0]);
 			switch ($type) {
 				case 'Intern':
 					$internUsers++;
@@ -296,8 +296,12 @@ function getUserType($dn, $cn, $title) {
 		$type = 'Intern';
 	} elseif (strpos($dn, "OU=Standard") !== FALSE) {
 		$type = "Regular";
-	} elseif (strpos($dn, "OU=Contractors") !== FALSE) {
+	} elseif (strpos($dn, "OU=Contractors") !== FALSE
+		|| strpos($dn, "OU=Managed Services") !== FALSE
+		|| strpos($dn, "OU=Consultant") !== FALSE) {
 		$type = "Contractor";
+	} elseif (strpos($dn, "OU=Board") !== FALSE) {
+		$type = "Board";
 	} else {
 		$type = str_replace(",{$config['ldap']['ldap_base_dn']}", "", $dn);
 		$type = str_replace("CN=$cn,", "", $type);
