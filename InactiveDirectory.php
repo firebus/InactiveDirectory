@@ -19,7 +19,7 @@ if ($firstRun) {
 $users = getUsers();
 if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
-	list($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers) = updateUsers($users);
+	$userCounts = updateUsers($users);
 	if ($firstRun) {
 		notify("first run. $count users.", "yellow");
 	} else {
@@ -28,8 +28,11 @@ if ($users) {
 		list($updatedUsers, $deadUsers, $newUsers) = getUpdatedUsers($deadUsers, $newUsers);
 		sendUserNotifications($updatedUsers, $deadUsers, $newUsers);
 		sendSummaryNotifications($updatedUsers, $deadUsers, $newUsers);
-		notify("$totalUsers total users. $regularUsers regular, $contractUsers contractors, $internUsers interns,"
-			. " $otherUsers uncategorized.", "yellow", "summary");
+		$message = "";
+		foreach ($userCounts as $type => $count) {
+			$message .= "$count $type. ";
+		}
+		notify($message, "yellow", "summary");
 	}
 } else {
 	logger(array('step' => 'getUsers', 'status' => 'failure', 'error' => 'no users'));
@@ -93,11 +96,8 @@ function getUsers() {
 # update/insert all valid users into the database
 function updateUsers($users) {
 	global $config, $dbh, $updated;
-	$totalUsers = $users['count'];
-	$regularUsers = 0;
-	$contractUsers = 0;
-	$internUsers = 0;
-	$otherUsers = 0;
+	$userCounts = array();
+	$userCounts['Total'] = $users['count'];
 	$skip_ous = array();
 	if ($config['ldap']['ldap_skip_ou_list']) {
 		$skip_ous = explode(',', $config['ldap']['ldap_skip_ou_list']);
@@ -109,31 +109,19 @@ function updateUsers($users) {
 				if (strstr($user['dn'], "OU=$ou")) {
 					logger(array('step' => 'updateUsers', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'ou',
 						'dn' => $user['dn'], 'ou' => $ou));
-					$totalUsers--;
+					$userCounts['Total']--;
 					continue 2;
 				}
 			}
 			if (empty($user['title']) || empty($user['department'])) {
 				logger(array('step' => 'updateUsers', 'action' => 'skip_user', 'status' => 'success', 'reason' => 'attributes',
 					'dn' => $user['dn']));
-				$totalUsers--;
+				$userCounts['Total']--;
 				continue;
 			}
 			
 			$type = getUserType($user['dn'], $user['cn'][0], $user['title'][0]);
-			switch ($type) {
-				case 'Intern':
-					$internUsers++;
-					break;
-				case 'Regular':
-					$regularUsers++;
-					break;
-				case 'Contractor':
-					$contractUsers++;
-					break;
-				default:
-					$otherUsers++;
-			}
+			$userCounts[$type]++;
 			
 			logger(array('step' => 'updateUsers', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
@@ -149,9 +137,8 @@ function updateUsers($users) {
 	}
 	$dbh->query('COMMIT TRANSACTION');
 	
-	logger(array('step' => 'updateUsers', 'action' => 'finish', 'status' => 'success', 'total' => $totalUsers,
-		'regular' => $regularUsers, 'contractor' => $contractUsers, 'intern' => $internUsers, 'other' => $otherUsers));
-	return array($totalUsers, $regularUsers, $contractUsers, $internUsers, $otherUsers);
+	logger(array('step' => 'updateUsers', 'action' => 'finish', 'status' => 'success'));
+	return $userCounts;
 }
 
 # any users that were not just updated are dead. mark them dead. send a notification.
@@ -293,18 +280,21 @@ function notify($message, $color, $type) {
 function getUserType($dn, $cn, $title) {
 	global $config;
 	if (strpos($title, 'Intern') !== FALSE) {
-		$type = 'Intern';
+		$type = 'Interns';
 	} elseif (strpos($dn, "OU=Standard") !== FALSE) {
 		$type = "Regular";
-	} elseif (strpos($dn, "OU=Contractors") !== FALSE
-		|| strpos($dn, "OU=Managed Services") !== FALSE
-		|| strpos($dn, "OU=Consultant") !== FALSE) {
-		$type = "Contractor";
+	} elseif (strpos($dn, "OU=Contractors") !== FALSE) {
+		$type = "Contractors";
+	} elseif (strpos($dn, "OU=Managed Services") !== FALSE) {
+		$type = "Managed Services";
+	} elseif (strpos($dn, "OU=Consultant") !== FALSE) {
+		$type = "Consultants";
 	} elseif (strpos($dn, "OU=Board") !== FALSE) {
-		$type = "Board";
+		$type = "Board Members";
+	} elseif (strpos($dn, "OU=Partners") !== FALSE) {
+		$type = "Partners";
 	} else {
-		$type = str_replace(",{$config['ldap']['ldap_base_dn']}", "", $dn);
-		$type = str_replace("CN=$cn,", "", $type);
+		$type = "Others";
 		logger(array('step' => 'getUserType', 'status' => 'failure', 'dn' => $dn, 'type' => $type));
 	}
 	
