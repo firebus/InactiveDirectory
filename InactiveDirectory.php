@@ -79,7 +79,7 @@ function getUsers() {
 			foreach ($letters as $letter) {
 				$filter = "(&{$config['ldap']['ldap_filter']}(CN=$letter*))";
 				$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $filter,
-					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', 'hiredatecustom', 'whencreated'));
+					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', 'whencreated'));
 				if ($result_id) {
 					$users = array_merge($users, ldap_get_entries($link_id, $result_id));
 				}
@@ -311,13 +311,8 @@ function logger($fields) {
 
 function calculateHireDate($user) {
 	$hireDate = '';
-	if (isset($user['hiredatecustom'][0])) {
-		$hireDateParts = explode('/', $user['hiredatecustom'][0]);
-		$hireDate = date('Y-m-d', mktime(0, 0, 0, $hireDateParts[0], $hireDateParts[1], $hireDateParts[2]));
-		logger(array('step' => 'calculateHireDate', 'action' => 'hiredatecustom', 'date' => $hireDate, 'ldap' => $user['hiredatecustom'][0]));
-	} elseif (isset($user['whencreated'][0])) {
+	if (isset($user['whencreated'][0])) {
 		$hireDate = substr($user['whencreated'][0], 0, 4) . '-' . substr($user['whencreated'][0], 4, 2) . '-' . substr($user['whencreated'][0], 6, 2);
-		logger(array('step' => 'calculateHireDate', 'action' => 'whencreated', 'date' => $hireDate, 'ldap' => $user['whencreated'][0]));
 	}
 
 	return $hireDate;
