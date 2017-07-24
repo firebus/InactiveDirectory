@@ -88,9 +88,11 @@ function getUsers() {
 			ldap_unbind($link_id);
 		}
 	}
-
-	$users['count'] = count($users) - 1;
-	return $users;
+	
+	if ($users) {
+		$users['count'] = count($users) - 1;
+		return $users;
+	}
 }
 
 # update/insert all valid users into the database
