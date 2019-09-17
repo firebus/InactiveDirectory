@@ -1,4 +1,4 @@
 config.ini
-InactiveDirectory.log
+InactiveDirectory.log*
 nbproject
 deathwatch.sq3

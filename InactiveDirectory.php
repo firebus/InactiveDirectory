@@ -198,6 +198,17 @@ function getUpdatedUsers($deadUsers, $newUsers) {
 }
 
 function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
+        foreach ($deadUsers as $deadUser) {
+                $type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
+                $notification = "goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, "
+                . "{$deadUser['title']} in {$deadUser['department']} at {$deadUser['location']}";
+                if ($deadUser['employee_id']) {
+                        $notification .= ", bib number {$deadUser['employee_id']}";
+                }
+                notify($notification, "red", "goodbye");
+                logger(array(
+                        'step' => 'sendUserNotifications', 'action' => 'dead', 'dn' => $deadUser['dn']));
+        }
 	foreach ($updatedUsers as $updatedUser) {
 		$type = getUserType($updatedUser['new']['dn'], $updatedUser['new']['cn'], $updatedUser['new']['title']);
 		$notification = "updated {$updatedUser['new']['cn']}, $type, {$updatedUser['new']['mail']},"
@@ -210,17 +221,6 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		notify($notification, "yellow", "update");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'updated', 'dn' => $updatedUser['new']['dn']));
-	}
-	foreach ($deadUsers as $deadUser) {
-		$type = getUserType($deadUser['dn'], $deadUser['cn'], $deadUser['title']);
-		$notification = "goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, "
-		. "{$deadUser['title']} in {$deadUser['department']} at {$deadUser['location']}";
-		if ($deadUser['employee_id']) {
-			$notification .= ", bib number {$deadUser['employee_id']}";
-		}
-		notify($notification, "red", "goodbye");
-		logger(array(
-			'step' => 'sendUserNotifications', 'action' => 'dead', 'dn' => $deadUser['dn']));
 	}
 	foreach ($newUsers as $newUser) {
 		$type = getUserType($newUser['dn'], $newUser['cn'], $newUser['title']);
