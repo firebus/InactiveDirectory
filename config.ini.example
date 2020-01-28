@@ -5,6 +5,7 @@ ldap_bind_password = 'password'
 ldap_base_dn = 'DC=example,DC=com'
 ldap_filter = 'OU=Foo Bar'
 ldap_skip_ous = 'Ignored Users,Bad Users'
+ldap_hired_field = 'Foo'
 
 [hipchat]
 hipchat_enabled = 1

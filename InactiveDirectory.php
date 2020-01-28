@@ -54,6 +54,7 @@ function setUpDatabase() {
 			"department TEXT,
 			"location" TEXT,
 			"mail" TEXT,
+			"hired" DATETIME,
 			"employee_id" INTEGER,
 			"new_id" INTEGER,
 			"created" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -79,7 +80,7 @@ function getUsers() {
 			foreach ($letters as $letter) {
 				$filter = "(&{$config['ldap']['ldap_filter']}(CN=$letter*))";
 				$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $filter,
-					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', 'employeeid'));
+					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', '$config['ldap']['ldap_hired_field']', 'employeeid'));
 				if ($result_id) {
 					$users = array_merge($users, ldap_get_entries($link_id, $result_id));
 				}
@@ -128,13 +129,14 @@ function updateUsers($users) {
 			logger(array('step' => 'updateUsers', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
-			$employeeId = isset($user['employeeid'][0]) ? $user['employeeid'][0] - 100000 : '';
+			$hired = isset($iser['hired'][0] ? $user['hired'][0] : '';
+			$employeeId = isset($user['employeeid'][0]) ? $user['employeeid'][0] : '';
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
-				. " (id, dn, cn, title, department, location, mail, employee_id, created, updated)"
-				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?, ?,"
+				. " (id, dn, cn, title, department, location, mail, hired, employee_id, created, updated)"
+				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?, ?, ?,"
 				. " (SELECT created FROM deathwatch WHERE dn = ? AND dead = 0), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-				$location, $mail, $employeeId, $user['dn'], $updated));
+				$location, $mail, $employeeId, $hired, $user['dn'], $updated));
 		}
 	}
 	$dbh->query('COMMIT TRANSACTION');
@@ -146,7 +148,7 @@ function updateUsers($users) {
 # any users that were not just updated are dead. mark them dead. send a notification.
 function getAndMarkDeadUsers() {
 	global $dbh, $updated;
-	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, employee_id"
+	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, hired, employee_id"
 		. " FROM deathwatch WHERE dead = 0 AND updated < datetime($updated, 'unixepoch')");
 	$deadUsers = $result->fetchAll(PDO::FETCH_ASSOC);
 	foreach ($deadUsers as $deadUser) {
@@ -162,7 +164,7 @@ function getAndMarkDeadUsers() {
 # any users with created time that is later than updated time are new. send a notification.
 function getNewUsers() {
 	global $dbh;
-	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, employee_id"
+	$result = $dbh->query("SELECT id, dn, cn, title, department, location, mail, hired, employee_id"
 		. " FROM deathwatch WHERE dead = 0 AND updated <= created");
 	$newUsers = $result->fetchAll(PDO::FETCH_ASSOC);
 	foreach ($newUsers as $newUser) {
@@ -205,6 +207,9 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
                 if ($deadUser['employee_id']) {
                         $notification .= ", bib number {$deadUser['employee_id']}";
                 }
+                if ($deadUser['hired']) {
+                  $notification .= ", hire date {$deadUser['hired']}";
+                }
                 notify($notification, "red", "goodbye");
                 logger(array(
                         'step' => 'sendUserNotifications', 'action' => 'dead', 'dn' => $deadUser['dn']));
@@ -229,6 +234,9 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		if ($newUser['employee_id']) {
 			$notification .= ", bib number {$newUser['employee_id']}";
 		}
+    if ($deadUser['hired']) {
+      $notification .= ", hire date {$deadUser['hired']}";
+    }
 		notify($notification, "green", "welcome");
 		logger(array(
 			'step' => 'sendUserNotifications', 'action' => 'new', 'dn' => $newUser['dn']));
