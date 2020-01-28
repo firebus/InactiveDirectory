@@ -129,7 +129,7 @@ function updateUsers($users) {
 			logger(array('step' => 'updateUsers', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
-			$hired = isset($iser['hired'][0] ? $user['hired'][0] : '';
+			$hired = isset($user['hired'][0] ? $user['hired'][0] : '';
 			$employeeId = isset($user['employeeid'][0]) ? $user['employeeid'][0] : '';
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
 				. " (id, dn, cn, title, department, location, mail, hired, employee_id, created, updated)"
