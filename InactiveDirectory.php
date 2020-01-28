@@ -80,7 +80,7 @@ function getUsers() {
 			foreach ($letters as $letter) {
 				$filter = "(&{$config['ldap']['ldap_filter']}(CN=$letter*))";
 				$result_id = ldap_search($link_id, $config['ldap']['ldap_base_dn'], $filter,
-					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', '$config['ldap']['ldap_hired_field']', 'employeeid'));
+					array('dn', 'cn', 'title', 'department', 'physicaldeliveryofficeName', 'mail', $config['ldap']['ldap_hired_field'], 'employeeid'));
 				if ($result_id) {
 					$users = array_merge($users, ldap_get_entries($link_id, $result_id));
 				}
@@ -122,23 +122,30 @@ function updateUsers($users) {
 				$userCounts['Total']--;
 				continue;
 			}
-			
+
 			$type = getUserType($user['dn'], $user['cn'][0], $user['title'][0]);
 			$userCounts[$type]++;
 			
 			logger(array('step' => 'updateUsers', 'action' => 'pre_update', 'status' => 'success', 'dn' => $user['dn']));
 			$location = isset($user['physicaldeliveryofficename'][0]) ? $user['physicaldeliveryofficename'][0] : '';
 			$mail = isset($user['mail'][0]) ? $user['mail'][0] : '';
-			$hired = isset($user['hired'][0] ? $user['hired'][0] : '';
+
+			if (isset($user[$config['ldap']['ldap_hired_field']][0])) {
+			  $hired = strtotime(substr($user[$config['ldap']['ldap_hired_field']][0], 0, -3) . " +0");
+			} else {
+			  $hired = '';
+			}
+
 			$employeeId = isset($user['employeeid'][0]) ? $user['employeeid'][0] : '';
 			$sth = $dbh->prepare("INSERT OR REPLACE INTO deathwatch"
 				. " (id, dn, cn, title, department, location, mail, hired, employee_id, created, updated)"
-				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?, ?, ?,"
+				. " VALUES ((SELECT id FROM deathwatch WHERE dn = ?), ?, ?, ?, ?, ?, ?, datetime(?, 'unixepoch'), ?,"
 				. " (SELECT created FROM deathwatch WHERE dn = ? AND dead = 0), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
-				$location, $mail, $employeeId, $hired, $user['dn'], $updated));
+				$location, $mail, $hired, $employeeId, $user['dn'], $updated));
 		}
 	}
+
 	$dbh->query('COMMIT TRANSACTION');
 	
 	logger(array('step' => 'updateUsers', 'action' => 'finish', 'status' => 'success'));
