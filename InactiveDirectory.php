@@ -215,7 +215,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
                         $notification .= ", bib number {$deadUser['employee_id']}";
                 }
                 if ($deadUser['hired']) {
-                  $notification .= ", hire date {$deadUser['hired']}";
+                  $notification .= ", hire date: {$deadUser['hired']}";
                 }
                 notify($notification, "red", "goodbye");
                 logger(array(
@@ -242,7 +242,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 			$notification .= ", bib number {$newUser['employee_id']}";
 		}
     if ($deadUser['hired']) {
-      $notification .= ", hire date {$deadUser['hired']}";
+      $notification .= ", hire date: {$newUser['hired']}";
     }
 		notify($notification, "green", "welcome");
 		logger(array(
