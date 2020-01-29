@@ -143,7 +143,7 @@ function updateUsers($users) {
 				. " (SELECT created FROM deathwatch WHERE dn = ? AND dead = 0), datetime(?, 'unixepoch'))");
 			$sth->execute(array($user['dn'], $user['dn'], $user['cn'][0], $user['title'][0], $user['department'][0],
 				$location, $mail, $hired, $employeeId, $user['dn'], $updated));
-		}
+		  }
 	}
 
 	$dbh->query('COMMIT TRANSACTION');
