@@ -212,7 +212,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
                 $notification = "goodbye {$deadUser['cn']}, $type, {$deadUser['mail']}, "
                 . "{$deadUser['title']} in {$deadUser['department']} at {$deadUser['location']}";
                 if ($deadUser['employee_id']) {
-                        $notification .= ", bib number {$deadUser['employee_id']}";
+                        $notification .= ", Employee Id: {$deadUser['employee_id']}";
                 }
                 if ($deadUser['hired']) {
                   $notification .= ", hire date: {$deadUser['hired']}";
@@ -239,7 +239,7 @@ function sendUserNotifications($updatedUsers, $deadUsers, $newUsers) {
 		$notification = "welcome {$newUser['cn']}, $type, {$newUser['mail']}, {$newUser['title']} in {$newUser['department']} at"
 				. " {$newUser['location']}";
 		if ($newUser['employee_id']) {
-			$notification .= ", bib number {$newUser['employee_id']}";
+			$notification .= ", Employee Id: {$newUser['employee_id']}";
 		}
     if ($deadUser['hired']) {
       $notification .= ", hire date: {$newUser['hired']}";
