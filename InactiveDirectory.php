@@ -16,6 +16,14 @@ if ($firstRun) {
 	logger(array('step' => 'setupDatabase', 'action' => 'first_run', 'status' => 'success'));
 }
 
+echo "ldap bind user: ";
+$config['ldap']['ldap_bind_user'] = trim(fgets(STDIN));
+
+echo "ldap bind password: ";
+system('stty -echo');
+$config['ldap']['ldap_bind_password'] = trim(fgets(STDIN));
+system('stty echo');
+
 $users = getUsers();
 if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
