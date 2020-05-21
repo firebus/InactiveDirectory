@@ -22,9 +22,11 @@ $config['ldap']['ldap_bind_user'] = trim(fgets(STDIN));
 echo "ldap bind password: ";
 system('stty -echo');
 $config['ldap']['ldap_bind_password'] = trim(fgets(STDIN));
+echo "\nauthenticating...";
 system('stty echo');
 
 $users = getUsers();
+echo "\n";
 if ($users) {
 	logger(array('step' => 'getUsers', 'status' => 'success', 'count' => $users['count']));
 	$userCounts = updateUsers($users);
